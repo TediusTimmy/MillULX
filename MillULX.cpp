@@ -1209,6 +1209,7 @@ public:
                      retire.use = SIGNAL_RETURN;
                      fillBelt(num);
                    }
+                  retire.next = num / 4 + ((0 != (num % 4)) ? 1 : 0);
                   retire.nops = (curOp >> 27) & 0x7;
                   break;
                case 10: // JMPI
