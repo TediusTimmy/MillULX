@@ -370,14 +370,20 @@ void convert (const std::vector<Op>& src, size_t dest,
 class Dispatch
  {
 public:
-   int alu1, alu2, flow;
+   int alu1, alu2, flow, args;
 
-   Dispatch(int alu1, int alu2, int flow) : alu1(alu1), alu2(alu2), flow(flow) { }
+   Dispatch(int alu1, int alu2, int flow) : alu1(alu1), alu2(alu2), flow(flow), args(0) { }
+
+   Dispatch& Args(int first, int second = 0, int third = 0, int fourth = 0)
+    {
+      args = 16 | (first << 5) | (second << 11) | (third << 17) | (fourth << 23);
+      return *this;
+    }
  };
 
-int nop(int elide = 0) // elide is for ALU side only
+int nop()
  {
-   return (elide << 28);
+   return 0;
  }
 
 int pick(int cond, int source, int _true, int _false)
@@ -431,11 +437,6 @@ int call(int cond, int source, int dest, int numargs, int numrets)
 int _int(int numargs, int numrets)
  {
    return 13 | (numargs << 20) | (numrets << 25);
- }
-
-int args(int first, int second = 0, int third = 0, int fourth = 0)
- {
-   return 16 | (first << 5) | (second << 11) | (third << 17) | (fourth << 23);
  }
 
 int changeDP (int dp, int inc, size_t i, size_t j)
@@ -507,22 +508,19 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
          case '.':
             compiledBlocks.back().push_back(Dispatch(nop(), nop(), ldb(dp)));
             dp = changeDP(dp, 1, i, j);
-            compiledBlocks.back().push_back(Dispatch(nop(1), nop(), _int(2, 0)));
-            compiledBlocks.back().push_back(Dispatch(nop(), nop(), args(31, 0)));
+            compiledBlocks.back().push_back(Dispatch(nop(), nop(), _int(2, 0)).Args(31, 0));
             break;
          case ',':
             compiledBlocks.back().push_back(Dispatch(addi(31, 1), nop(), nop()));
             dp = changeDP(dp, 1, i, j);
-            compiledBlocks.back().push_back(Dispatch(nop(1), nop(), _int(1, 1)));
-            compiledBlocks.back().push_back(Dispatch(nop(), nop(), args(0)));
+            compiledBlocks.back().push_back(Dispatch(nop(), nop(), _int(1, 1)).Args(0));
             dp = changeDP(dp, 1, i, j);
             compiledBlocks.back().push_back(Dispatch(nop(), nop(), stb(dp, 0)));
             break;
          case '[':
             compiledBlocks.back().push_back(Dispatch(subi(30, converts[i][j].loop), nop(), ldb(dp))); // Flag the offset for calls as special
             dp = changeDP(dp, 2, i, j);
-            compiledBlocks.back().push_back(Dispatch(nop(1), nop(), call(8, 0, 1, 1, 1)));
-            compiledBlocks.back().push_back(Dispatch(nop(), nop(), args(dp)));
+            compiledBlocks.back().push_back(Dispatch(nop(), nop(), call(8, 0, 1, 1, 1)).Args(dp));
             dp = changeDP(dp, 1, i, j);
             compiledBlocks.back().push_back(Dispatch(nop(), pick(14, 0, 0, dp), nop()));
             dp = changeDP(dp, -dp, i, j);
@@ -540,9 +538,60 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
        {
          compiledBlocks.back().push_back(Dispatch(nop(), nop(), ldb(dp)));
          dp = changeDP(dp, 1, i, 0xFFFFFFFF);
-         compiledBlocks.back().push_back(Dispatch(addi(dp, 0), nop(), ret(7, 0, 1)));
-         compiledBlocks.back().push_back(Dispatch(nop(), nop(), args(dp)));
+         compiledBlocks.back().push_back(Dispatch(addi(dp, 0), nop(), ret(7, 0, 1)).Args(dp));
          compiledBlocks.back().push_back(Dispatch(nop(), nop(), jmpi()));
+       }
+    }
+ }
+
+// Loop through the compiled instructions and elide ALU NOPs.
+void elide (std::vector<std::vector<Dispatch> >& compiledBlocks)
+ {
+   for (size_t i = 0U; i < compiledBlocks.size(); ++i)
+    {
+      // Elide ALU NOPs
+      for (size_t j = 1U; j < compiledBlocks[i].size(); ++j)
+       {
+         if ((0 == compiledBlocks[i][j].alu1) && (0 == compiledBlocks[i][j].alu2))
+          {
+            switch (compiledBlocks[i][j - 1].flow & 0xF)
+             {
+            case 0: // NOP
+               compiledBlocks[i][j - 1].flow |= 1 << 29;
+               compiledBlocks[i][j].alu1 = -1;
+               compiledBlocks[i][j].alu2 = -1;
+               break;
+            case 4: // LDB
+            case 7: // STB
+            case 9: // RET
+               compiledBlocks[i][j - 1].flow |= 1 << 27;
+               compiledBlocks[i][j].alu1 = -1;
+               compiledBlocks[i][j].alu2 = -1;
+               break;
+            // case 10 can only occur at the end of a block.
+            case 12: // CALL
+            case 13: // INT
+               compiledBlocks[i][j - 1].flow |= 1 << 30;
+               compiledBlocks[i][j].alu1 = -1;
+               compiledBlocks[i][j].alu2 = -1;
+               break;
+             }
+          }
+         if ((0 == compiledBlocks[i][j].flow) && (-1 != compiledBlocks[i][j - 1].alu1))
+          {
+            switch (compiledBlocks[i][j - 1].alu1 & 0x1F)
+             {
+            case 0: // NOP
+               compiledBlocks[i][j - 1].alu1 |= 1 << 28;
+               compiledBlocks[i][j].flow = -1;
+               break;
+            case 21: // ADDI
+            case 22: // SUBI
+               compiledBlocks[i][j - 1].alu1 |= 1 << 29;
+               compiledBlocks[i][j].flow = -1;
+               break;
+             }
+          }
        }
     }
  }
@@ -574,15 +623,31 @@ size_t compile2(const std::vector<std::vector<Dispatch> >& compiledBlocks, std::
        {
          if ((0U == entryPoints[i]) && (true == canAdd(deps[i], complete)))
           {
-            entryPoints[i] = memory.size() + compiledBlocks[i].size();
             complete.insert(i);
             for (size_t j = compiledBlocks[i].size() - 1U; j > 0; --j) // No block should ever be of zero size.
              {
+               // Is this an elided FLOW NOP?
+               if (-1 == compiledBlocks[i][j].flow)
+                {
+                  continue;
+                }
+
+               if (0 != compiledBlocks[i][j].args)
+                {
+                  memory.push_back(compiledBlocks[i][j].args);
+                }
                memory.push_back(compiledBlocks[i][j].flow);
              }
             memory.push_back(compiledBlocks[i][0U].flow);
+            entryPoints[i] = memory.size();
             for (size_t j = 0U; j < compiledBlocks[i].size(); ++j)
              {
+               // Are these elided ALU NOPs?
+               if ((-1 == compiledBlocks[i][j].alu1) && (-1 == compiledBlocks[i][j].alu2))
+                {
+                  continue;
+                }
+
                if (23 == (compiledBlocks[i][j].alu1 & 0x1F)) // Is this loading a block entry address?
                 {
                   int index = ((compiledBlocks[i][j].alu1 >> 12) & 0x1FFFF);
@@ -679,6 +744,7 @@ int main (void)
 
    std::vector<std::vector<Dispatch> > compiledBlocks;
    compile1(converts, compiledBlocks);
+   elide(compiledBlocks);
 
    std::vector<int> memory;
    // The first 8K words (32K bytes) are the tape of zeros.
