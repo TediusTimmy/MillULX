@@ -1043,7 +1043,7 @@ public:
                   if (conditionTrue(cond, src))
                    {
                      BELT_T belt [BELT_SIZE];
-                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
                      fillBelt(num, belt);
                      if (0U == (curOp & 0x10))
                       {
@@ -1065,7 +1065,7 @@ public:
                   if (conditionTrue(cond, src))
                    {
                      BELT_T belt [BELT_SIZE];
-                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
                      fillBelt(num, belt);
 
                      if (1U != machine->frames.size())
@@ -1094,7 +1094,7 @@ public:
                    }
                   else
                    {
-                     frame->pc += 1U + num / 4 + ((0 != (num % 4)) ? 1 : 0);
+                     frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
                    }
                   break;
                case 10: // JMPI
@@ -1134,7 +1134,7 @@ public:
                    {
                      ++frame->pc;
                      temp = getMemory(frame->pc);
-                     if (0U != (temp & 0x10))
+                     if (0U == (temp & 0x10))
                       {
                         std::printf("Terminate initiated due to bad branch: %d\n", static_cast<int>(frame->pc));
                         machine->invalidOp = true;
@@ -1147,7 +1147,7 @@ public:
 
                      frame->callOp = curOp;
                      BELT_T belt [BELT_SIZE];
-                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
                      fillBelt(num, belt);
 
                      machine->frames.push_back(Frame());
@@ -1179,7 +1179,7 @@ public:
                       {
                         frame->callOp = curOp;
                         BELT_T belt [BELT_SIZE];
-                        for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+                        for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
                         fillBelt(num, belt);
 
                         machine->frames.push_back(Frame());
@@ -1218,8 +1218,8 @@ public:
                   if (conditionTrue(cond, src))
                    {
                      BELT_T belt [BELT_SIZE], rets [BELT_SIZE];
-                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
-                     for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = INVALID;
+                     for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
+                     for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
                      fillBelt(num, belt);
                      serviceInterrupt(*machine, op1, belt, rets);
                      for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)

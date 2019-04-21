@@ -1887,7 +1887,7 @@ TOCK_OP_INTRO
          if (conditionTrue(cond, src))
           {
             BELT_T belt [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             fillBelt(num, belt);
             frame->ffront = 0U;
             frame->fsize = 0U;
@@ -1905,7 +1905,7 @@ TOCK_OP_INTRO
          if (conditionTrue(cond, src))
           {
             BELT_T belt [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             fillBelt(num, belt);
 
             if (1U != machine->frames.size())
@@ -1936,7 +1936,7 @@ TOCK_OP_INTRO
           }
          else
           {
-            frame->pc += 1U + num / 4 + ((0 != (num % 4)) ? 1 : 0);
+            frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1966,7 +1966,7 @@ TOCK_OP_INTRO
           {
             ++frame->pc;
             temp = getMemory(frame->pc);
-            if (0U != (temp & 0x10))
+            if (0U == (temp & 0x10))
              {
                std::printf("Terminate initiated due to bad branch: %d\n", static_cast<int>(frame->pc));
                machine->invalidOp = true;
@@ -1980,7 +1980,7 @@ TOCK_OP_INTRO
 
             frame->callOp = curOp;
             BELT_T belt [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             fillBelt(num, belt);
 
             machine->frames.push_back(Frame());
@@ -2016,7 +2016,7 @@ TOCK_OP_INTRO
              {
                frame->callOp = curOp;
                BELT_T belt [BELT_SIZE];
-               for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+               for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
                fillBelt(num, belt);
 
                machine->frames.push_back(Frame());
@@ -2060,8 +2060,8 @@ TOCK_OP_INTRO
          if (conditionTrue(cond, src))
           {
             BELT_T belt [BELT_SIZE], rets [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
-            for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
             fillBelt(num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
@@ -2182,7 +2182,7 @@ TOCK_OP_INTRO
          if (conditionTrue(cond, src))
           {
             BELT_T belt [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             fillBelt(num, belt);
             frame->sfront = 0U;
             frame->ssize = 0U;
@@ -2193,7 +2193,7 @@ TOCK_OP_INTRO
           }
          else
           {
-            frame->pc += 1U + num / 4 + ((0 != (num % 4)) ? 1 : 0);
+            frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -2230,8 +2230,8 @@ TOCK_OP_INTRO
          if (conditionTrue(cond, src))
           {
             BELT_T belt [BELT_SIZE], rets [BELT_SIZE];
-            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = INVALID;
-            for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = INVALID;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
+            for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
             fillBelt(num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
