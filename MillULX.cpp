@@ -1690,6 +1690,7 @@ TOCK_OP_INTRO
              {
                frame->entryPoint = ((op1 & 0xFFFFFFFFLL) + frame->entryPoint) & 0xFFFFFFFFLL;
                frame->pc = frame->entryPoint - 1U;
+               curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
              }
             else
              {
@@ -1953,6 +1954,7 @@ TOCK_OP_INTRO
              }
             frame->entryPoint = frame->entryPoint + temp;
             frame->pc = frame->entryPoint - 1U;
+            curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1993,6 +1995,7 @@ TOCK_OP_INTRO
              }
             frame->entryPoint = prevFrame->entryPoint + temp;
             frame->pc = frame->entryPoint - 1U;
+            curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
           }
          else
           {
@@ -2029,6 +2032,7 @@ TOCK_OP_INTRO
                 }
                frame->entryPoint = ((op1 & 0xFFFFFFFFLL) + prevFrame->entryPoint) & 0xFFFFFFFFLL;
                frame->pc = frame->entryPoint - 1U;
+               curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
              }
             else
              {
@@ -2218,6 +2222,7 @@ TOCK_OP_INTRO
              }
             frame->entryPoint = frame->entryPoint + temp;
             frame->pc = frame->entryPoint - 1U;
+            curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK

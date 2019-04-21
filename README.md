@@ -19,6 +19,7 @@ bit.
 6. CALLI is now conditional: it has the form of INT and is always followed by an ARGS instruction with a 26-bit immediate.
 7. The bits in INT and CALL have moved: one bit of NOP has moved to after the instruction (the belt selector bit).
 8. The belt destination bit is now honored for CALL, CALLI, and INT. (So the machine really has two general-purpose belts.)
+9. The instruction after a taken branch (JMP, JMPI, CALL, CALLI) is always a Tick. The NOP bit is only honored if the branch isn't taken, and always after the return from a call.
 
 # Note
 I make mistakes and there are undoubtedly bugs in the VM. The "executable" format is poor and vulnerable to attack. Remember that this is a toy.

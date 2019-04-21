@@ -416,6 +416,18 @@ int changeDP (int dp, int inc, size_t i, size_t j)
 
 static const int NO_TICK = 0x80000000;
 
+void surpressTick(std::vector<Dispatch>& block)
+ {
+   if (0U != block.size())
+    {
+      block.back().op ^= NO_TICK;
+    }
+   else
+    {
+      block.push_back(Dispatch(nop()));
+    }
+ }
+
 // Convert Form2 into the actual instructions that will be issued.
 void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std::vector<Dispatch> >& compiledBlocks)
  {
@@ -435,7 +447,7 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
          switch (converts[i][j].type)
           {
          case '+':
-            compiledBlocks.back().push_back(Dispatch(nop()));
+            surpressTick(compiledBlocks.back());
             compiledBlocks.back().push_back(Dispatch(ldb(dp)));
             compiledBlocks.back().push_back(Dispatch(addi(0, converts[i][j].run)));
             dp = changeDP(dp, 2, i, j);
@@ -446,7 +458,7 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
             dp = changeDP(dp, -dp, i, j);
             break;
          case '.':
-            compiledBlocks.back().push_back(Dispatch(nop()));
+            surpressTick(compiledBlocks.back());
             compiledBlocks.back().push_back(Dispatch(ldb(dp) | NO_TICK));
             dp = changeDP(dp, 1, i, j);
             compiledBlocks.back().push_back(Dispatch(_int(2, 0)).Args(31, 0));
@@ -458,11 +470,11 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
             compiledBlocks.back().push_back(Dispatch(stb(dp, 0)));
             break;
          case '0':
-            compiledBlocks.back().push_back(Dispatch(nop()));
+            surpressTick(compiledBlocks.back());
             compiledBlocks.back().push_back(Dispatch(stb(dp, 30)));
             break;
          case '[':
-            compiledBlocks.back().push_back(Dispatch(nop()));
+            surpressTick(compiledBlocks.back());
             compiledBlocks.back().push_back(Dispatch(ldb(dp) | NO_TICK));
             dp = changeDP(dp, 1, i, j);
             compiledBlocks.back().push_back(Dispatch(calli(8, 0, 1, 1)).Dest(converts[i][j].loop).Args(dp));
@@ -480,7 +492,7 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
           }
        }
 
-      compiledBlocks.back().push_back(Dispatch(nop()));
+      surpressTick(compiledBlocks.back());
       if (0U == i)
        {
          compiledBlocks.back().push_back(Dispatch(ret(0, 0, 0)));

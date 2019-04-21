@@ -879,6 +879,7 @@ public:
                       {
                         frame->entryPoint = ((op1 & 0xFFFFFFFFLL) + frame->entryPoint) & 0xFFFFFFFFLL;
                         frame->pc = frame->entryPoint - 1U;
+                        curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
                       }
                      else
                       {
@@ -1125,6 +1126,7 @@ public:
                       }
                      frame->entryPoint = frame->entryPoint + temp;
                      frame->pc = frame->entryPoint - 1U;
+                     curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
                    }
                   break;
                case 11: // CALLI
@@ -1160,6 +1162,7 @@ public:
                       }
                      frame->entryPoint = prevFrame->entryPoint + temp;
                      frame->pc = frame->entryPoint - 1U;
+                     curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
                    }
                   else
                    {
@@ -1192,6 +1195,7 @@ public:
                          }
                         frame->entryPoint = ((op1 & 0xFFFFFFFFLL) + prevFrame->entryPoint) & 0xFFFFFFFFLL;
                         frame->pc = frame->entryPoint - 1U;
+                        curOp &= 0x7FFFFFFF; // The instruction after a branch taken is ALWAYS a Tick.
                       }
                      else
                       {
