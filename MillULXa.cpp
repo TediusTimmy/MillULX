@@ -1222,9 +1222,9 @@ public:
                      for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
                      fillBelt(num, belt);
                      serviceInterrupt(*machine, op1, belt, rets);
-                     for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
+                     for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & rets[i])); ++i)
                       {
-                        the_retire(*frame, belt[i]);
+                        the_retire(*frame, rets[i]);
                       }
                    }
                   else

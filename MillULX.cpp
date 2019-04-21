@@ -2064,9 +2064,9 @@ TOCK_OP_INTRO
             for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
             fillBelt(num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
-            for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
+            for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & rets[i])); ++i)
              {
-               retire(*frame, belt[i]);
+               retire(*frame, rets[i]);
              }
           }
          else
@@ -2234,9 +2234,9 @@ TOCK_OP_INTRO
             for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
             fillBelt(num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
-            for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
+            for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & rets[i])); ++i)
              {
-               slowretire(*frame, belt[i]);
+               slowretire(*frame, rets[i]);
              }
           }
          else

@@ -453,9 +453,8 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
             break;
          case ',':
             compiledBlocks.back().push_back(Dispatch(addi(31, 1)));
-            dp = changeDP(dp, 1, i, j);
             compiledBlocks.back().push_back(Dispatch(_int(1, 1) | NO_TICK).Args(0));
-            dp = changeDP(dp, 1, i, j);
+            dp = changeDP(dp, 2, i, j);
             compiledBlocks.back().push_back(Dispatch(stb(dp, 0)));
             break;
          case '0':
@@ -473,7 +472,12 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
             break;
           }
 
-         // FUTURE : insert check for dp > 20 here and rescue the dp if so.
+         // Rescue the dp if necessary.
+         if (dp > 20) // Both Taking Over the World and Finally Taking Over the World
+          {           // require this
+            compiledBlocks.back().push_back(Dispatch(addi(dp, 0) | NO_TICK));
+            dp = changeDP(dp, -dp, i, j);
+          }
        }
 
       compiledBlocks.back().push_back(Dispatch(nop()));
