@@ -442,44 +442,22 @@ public:
 
    static BELT_T getZero(BELT_T input)
     {
-      if (0U == input)
+      if (0U == (input & 0xFFFFFFFF))
        {
          return ZERO;
        }
       return 0;
     }
 
-   BELT_T getOverflow(BELT_T op1, BELT_T op2, BELT_T result)
+   BELT_T getAdd(BELT_T op1, BELT_T op2, BELT_T op3)
     {
-      // If the sign of the arguments are the same...
-      if ((op1 & NEGATIVE) == (op2 & NEGATIVE))
-       {
-         // But the result has a different sign, then overflow has occurred.
-         if ((op1 & NEGATIVE) != (result & NEGATIVE))
-          {
-            return OVERFLOW;
-          }
-       }
-      return 0U;
-    }
-
-   BELT_T getOverflow(BELT_T op1, BELT_T op2, BELT_T op3, bool subtract)
-    {
-      BELT_T ci, co;
       BELT_T cb = (op3 & CARRY) ? 1 : 0;
-      ci = ((op1 & 0x7FFFFFFF) + (op2 & 0x7FFFFFFF) + cb) >> 31;
-      co = (ci + ((op1 >> 31) & 1) + ((op2 >> 31) & 1)) >> 1;
-
-      if (true == subtract)
+      BELT_T result = (op1 + op2 + cb) & 0x1FFFFFFFFLL; // CARRY/BORROW is free
+      if (0U != ((result ^ op1) & (result ^ op2) & 0x80000000))
        {
-         co ^= 1;
+         result |= OVERFLOW;
        }
-
-      if (ci != co)
-       {
-         return OVERFLOW;
-       }
-      return 0U;
+      return result;
     }
 
    bool conditionTrue(BELT_T cond, BELT_T flags)
@@ -663,15 +641,21 @@ public:
                   switch (curOp & 0xF)
                    {
                      case 6: // ADD
-                        temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL; // Carry is FREE.
-                        temp |= getOverflow(op1, op2, temp);
+                        temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, 0U);
                         break;
                      case 7: // SUB
-                        temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL;
-                        temp |= getOverflow(op1, -op2, 0L, true);
+                        temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, CARRY) ^ CARRY;
                         break;
                      case 8: // MUL
-                        temp = ((op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL)) & 0xFFFFFFFFLL;
+                        temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
+                        if (0U != ((op1 ^ op2 ^ temp) & 0x80000000LL))
+                         {
+                           temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
+                         }
+                        else
+                         {
+                           temp &= 0xFFFFFFFFLL;
+                         }
                         break;
                      case 9: // DIV
                         if (0U == (op2 & 0xFFFFFFFFLL))
@@ -826,8 +810,7 @@ public:
                   case 1: // ADDC
                      if (false == extraNumerical(op1, op2, temp))
                       {
-                        temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL) + ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-                        temp |= getOverflow(op1, op2, op3, false);
+                        temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, CARRY);
                         temp |= getZero(temp);
                       }
                      dest[0] = temp;
@@ -835,8 +818,7 @@ public:
                   case 2: // SUBB
                      if (false == extraNumerical(op1, op2, temp))
                       {
-                        temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL) - ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-                        temp |= getOverflow(op1, -op2, op3, true);
+                        temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, op3 ^ CARRY) ^ CARRY;
                         temp |= getZero(temp);
                       }
                      dest[0] = temp;
@@ -875,20 +857,15 @@ public:
                         else
                          {
                            temp = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) / (op3 & 0xFFFFFFFFLL);
-                           BELT_T temp2 = ((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
-                           if (temp <= 0xFFFFFFFFLL)
+                           BELT_T temp2 = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
+                           if (temp > 0xFFFFFFFFLL)
                             {
-                              temp |= getZero(temp);
-                              temp2 |= getZero(temp2);
-                              dest[0] = temp;
-                              dest[1] = temp2;
+                              temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
                             }
-                           else
-                            {
-                              temp = INVALID | frame.alupc;
-                              dest[0] = temp;
-                              dest[1] = temp;
-                            }
+                           temp |= getZero(temp);
+                           temp2 |= getZero(temp2);
+                           dest[0] = temp;
+                           dest[1] = temp2;
                          }
                       }
                      break;
@@ -928,7 +905,7 @@ public:
    void fillBelt(int num)
     {
       int memOff = -1; // Start at the current instruction
-      BELT_T cur;
+      BELT_T cur = 0U; // If cur is used uninitialized, that is a bug in the compiler.
       Frame& frame = machine->frames.back();
       FlowRetire& retire = frame.flow_retire[slot];
       for (int i = 0; i < num; ++i)
