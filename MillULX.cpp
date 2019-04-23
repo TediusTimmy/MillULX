@@ -810,7 +810,7 @@ public:
                   case 1: // ADDC
                      if (false == extraNumerical(op1, op2, temp))
                       {
-                        temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, CARRY);
+                        temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, op3);
                         temp |= getZero(temp);
                       }
                      dest[0] = temp;
