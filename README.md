@@ -68,7 +68,7 @@ Uses the carry bit as the borrow bit from operand 3.
 Drops two results: the low word and then the high word of the product.
 
 ###### divl (high, low, rhs)
-Concatenates high and low and divides by operand 3. Drops two results: the quotient and the remainder. If the divisor is zero, or the quotient will not fit in a word, drops two INVALIDs instead.
+Concatenates high and low and divides by operand 3. Drops two results: the quotient and the remainder. If the divisor is zero, drops two INVALIDs instead. If the quotient will not fit in a word, returns the quotient with the high bits truncated and sets the overflow flag on the quotient.
 
 ###### pick? (cond, source, true, false)
 Pick either true or false depending on the condition from source.
@@ -78,6 +78,7 @@ Pick either true or false depending on the condition from source.
 ###### sub (cond, source, lhs, rhs)
 
 ###### mul (cond, source, lhs, rhs)
+Sets the overflow flag if the result had signed overflow.
 
 ###### div (cond, source, lhs, rhs)
 Drops two results: the quotient and the remainder. Drops INVALIDs if the divisor is zero. LHS and RHS are treated as SIGNED.
@@ -110,7 +111,7 @@ Immediate is still sign-extended before division.
 
 ###### shri (lhs, imm)
 
-###### sshri (lhs, imm)
+###### ashri (lhs, imm)
 
 ###### andi (lhs, imm)
 
@@ -186,4 +187,4 @@ Currently returns zero. Gestalt without arguments should be interpreted as query
 
 ## Why is it called MillULX?
 Well, I wanted to make a Mill-like Glulx. Glulx is a 32 bit virtual machine for running interactive fiction. It was built to overcome the limitations of Infocom's Z-Machine. There are some warts in the specification, due to how Inform compiles to Z-Machine. I don't know what the benefit of running three threads to implement the VM would be, though. So, I have a distant goal of building out the VM to support glk and have Inform 6 and 7 target it, but I should see if there is any benefit to this form of virtual machine.  
-Postscript Note: Initial results from running compiled bf do not look good.
+Postscript Note: Initial results from running compiled bf do not look good. Compiled bf is an order of magnitude slower than LINEAR_B.
