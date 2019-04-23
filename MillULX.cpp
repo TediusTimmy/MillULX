@@ -305,44 +305,22 @@ public:
 
    static BELT_T getZero(BELT_T input)
     {
-      if (0U == input)
+      if (0U == (input & 0xFFFFFFFFLL))
        {
          return ZERO;
        }
       return 0;
     }
 
-   BELT_T getOverflow(BELT_T op1, BELT_T op2, BELT_T result)
+   BELT_T getAdd(BELT_T op1, BELT_T op2, BELT_T op3)
     {
-      // If the sign of the arguments are the same...
-      if ((op1 & NEGATIVE) == (op2 & NEGATIVE))
-       {
-         // But the result has a different sign, then overflow has occurred.
-         if ((op1 & NEGATIVE) != (result & NEGATIVE))
-          {
-            return OVERFLOW;
-          }
-       }
-      return 0U;
-    }
-
-   BELT_T getOverflow(BELT_T op1, BELT_T op2, BELT_T op3, bool subtract)
-    {
-      BELT_T ci, co;
       BELT_T cb = (op3 & CARRY) ? 1 : 0;
-      ci = ((op1 & 0x7FFFFFFF) + (op2 & 0x7FFFFFFF) + cb) >> 31;
-      co = (ci + ((op1 >> 31) & 1) + ((op2 >> 31) & 1)) >> 1;
-
-      if (true == subtract)
+      BELT_T result = (op1 + op2 + cb) & 0x1FFFFFFFFLL; // CARRY/BORROW is free
+      if (0U != ((result ^ op1) & (result ^ op2) & 0x80000000))
        {
-         co ^= 1;
+         result |= OVERFLOW;
        }
-
-      if (ci != co)
-       {
-         return OVERFLOW;
-       }
-      return 0U;
+      return result;
     }
 
    bool conditionTrue(BELT_T cond, BELT_T flags)
@@ -493,7 +471,7 @@ public:
 
    void fillBelt(int num, BELT_T* rets)
     {
-      BELT_T cur;
+      BELT_T cur = 0U;
       Frame& frame = machine->frames.back();
       for (int i = 0; i < num; ++i)
        {
@@ -722,8 +700,7 @@ OP_INTRO(ADDCF)
 LONG_OP_INTRO
          if (false == extraNumerical(op1, op2, temp))
           {
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL) + ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, op2, op3, false);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, op3);
             temp |= getZero(temp);
           }
          retire(temp);
@@ -734,8 +711,7 @@ OP_INTRO(SUBBF)
 LONG_OP_INTRO
          if (false == extraNumerical(op1, op2, temp))
           {
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL) - ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, op3, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, op3 ^ CARRY) ^ CARRY;
             temp |= getZero(temp);
           }
          retire(temp);
@@ -755,10 +731,8 @@ LONG_OP_INTRO
             temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
             BELT_T temp1 = temp & 0xFFFFFFFFLL;
             BELT_T temp2 = (temp >> 32) & 0xFFFFFFFFLL;
-            temp1 |= getZero(temp1);
-            temp2 |= getZero(temp2);
-            retire(temp1);
-            retire(temp2);
+            RETIRE(temp1)
+            RETIRE(temp2)
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -781,20 +755,13 @@ LONG_OP_INTRO
             else
              {
                temp = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) / (op3 & 0xFFFFFFFFLL);
-               BELT_T temp2 = ((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
-               if (temp <= 0xFFFFFFFFLL)
+               BELT_T temp2 = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
+               if (temp > 0xFFFFFFFFLL)
                 {
-                  temp |= getZero(temp);
-                  temp2 |= getZero(temp2);
-                  retire(temp);
-                  retire(temp2);
+                  temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
                 }
-               else
-                {
-                  temp = INVALID | frame->pc;
-                  retire(temp);
-                  retire(temp);
-                }
+               RETIRE(temp)
+               RETIRE(temp2)
              }
           }
 LONG_OP_CASE_END
@@ -817,8 +784,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(ADDF)
 REG_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL; // Carry is FREE.
-            temp |= getOverflow(op1, op2, temp);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, 0U);
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -826,8 +792,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(SUBF)
 REG_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, 0L, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, CARRY) ^ CARRY;
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -835,7 +800,15 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(MULF)
 REG_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL)) & 0xFFFFFFFFLL;
+            temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
+            if (0U != ((op1 ^ op2 ^ temp) & 0x80000000LL))
+             {
+               temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
+             }
+            else
+             {
+               temp &= 0xFFFFFFFFLL;
+             }
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1013,8 +986,7 @@ OP_INTRO(INV)
 OP_INTRO(ADDIF)
 IMM_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL; // Carry is FREE.
-            temp |= getOverflow(op1, op2, temp);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, 0U);
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1022,8 +994,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(SUBIF)
 IMM_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, 0L, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, CARRY) ^ CARRY;
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1031,7 +1002,15 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(MULIF)
 IMM_OP_INTRO
 OP_BASE_CASES_FAST
-            temp = ((op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL)) & 0xFFFFFFFFLL;
+            temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
+            if (0U != ((op1 ^ op2 ^ temp) & 0x80000000LL))
+             {
+               temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
+             }
+            else
+             {
+               temp &= 0xFFFFFFFFLL;
+             }
             RETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1204,8 +1183,7 @@ OP_INTRO(ADDCS)
 LONG_OP_INTRO
          if (false == extraNumerical(op1, op2, temp))
           {
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL) + ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, op2, op3, false);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, op3);
             temp |= getZero(temp);
           }
          slowretire(temp);
@@ -1216,8 +1194,7 @@ OP_INTRO(SUBBS)
 LONG_OP_INTRO
          if (false == extraNumerical(op1, op2, temp))
           {
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL) - ((op3 & CARRY) ? 1 : 0)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, op3, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, op3 ^ CARRY) ^ CARRY;
             temp |= getZero(temp);
           }
          slowretire(temp);
@@ -1237,10 +1214,8 @@ LONG_OP_INTRO
             temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
             BELT_T temp1 = temp & 0xFFFFFFFFLL;
             BELT_T temp2 = (temp >> 32) & 0xFFFFFFFFLL;
-            temp1 |= getZero(temp1);
-            temp2 |= getZero(temp2);
-            slowretire(temp1);
-            slowretire(temp2);
+            SLOWRETIRE(temp1)
+            SLOWRETIRE(temp2)
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1263,20 +1238,13 @@ LONG_OP_INTRO
             else
              {
                temp = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) / (op3 & 0xFFFFFFFFLL);
-               BELT_T temp2 = ((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
-               if (temp <= 0xFFFFFFFFLL)
+               BELT_T temp2 = static_cast<unsigned long long>((op1 << 32) | (op2 & 0xFFFFFFFFLL)) % (op3 & 0xFFFFFFFFLL);
+               if (temp > 0xFFFFFFFFLL)
                 {
-                  temp |= getZero(temp);
-                  temp2 |= getZero(temp2);
-                  slowretire(temp);
-                  slowretire(temp2);
+                  temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
                 }
-               else
-                {
-                  temp = INVALID | frame->pc;
-                  slowretire(temp);
-                  slowretire(temp);
-                }
+               SLOWRETIRE(temp)
+               SLOWRETIRE(temp2)
              }
           }
 LONG_OP_CASE_END
@@ -1299,8 +1267,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(ADDS)
 REG_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL; // Carry is FREE.
-            temp |= getOverflow(op1, op2, temp);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, 0U);
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1308,8 +1275,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(SUBS)
 REG_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, 0L, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, CARRY) ^ CARRY;
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1317,7 +1283,15 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(MULS)
 REG_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL)) & 0xFFFFFFFFLL;
+            temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
+            if (0U != ((op1 ^ op2 ^ temp) & 0x80000000LL))
+             {
+               temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
+             }
+            else
+             {
+               temp &= 0xFFFFFFFFLL;
+             }
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1489,8 +1463,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(ADDIS)
 IMM_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) + (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL; // Carry is FREE.
-            temp |= getOverflow(op1, op2, temp);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, 0U);
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1498,8 +1471,7 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(SUBIS)
 IMM_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) - (op2 & 0xFFFFFFFFLL)) & 0x1FFFFFFFFLL;
-            temp |= getOverflow(op1, -op2, 0L, true);
+            temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, CARRY) ^ CARRY;
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1507,7 +1479,15 @@ DISPATCH_NEXT_FROM_TICK
 OP_INTRO(MULIS)
 IMM_OP_INTRO
 OP_BASE_CASES_SLOW
-            temp = ((op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL)) & 0xFFFFFFFFLL;
+            temp = (op1 & 0xFFFFFFFFLL) * (op2 & 0xFFFFFFFFLL);
+            if (0U != ((op1 ^ op2 ^ temp) & 0x80000000LL))
+             {
+               temp = (temp & 0xFFFFFFFFLL) | OVERFLOW;
+             }
+            else
+             {
+               temp &= 0xFFFFFFFFLL;
+             }
             SLOWRETIRE(temp)
 OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
