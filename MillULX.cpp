@@ -170,45 +170,22 @@ public:
 
    static BELT_T getBeltContent(Frame& frame, size_t beltLocation)
     {
-      // This implementation retains stale values on the belt that get hidden. I don't like it.
-      switch (beltLocation)
+      if (0U == (beltLocation & 0x20))
        {
-         case 30:
-            return ZERO;
-         case 31:
-            return 1;
-         case 62:
+         if ((beltLocation > frame.fsize) && (beltLocation < 30))
+          {
             return INVALID;
-         case 63:
-            return TRANSIENT;
+          }
+         return frame.fast[(frame.ffront + beltLocation) & 0x1F];
        }
-      size_t front = frame.ffront;
-      size_t size = frame.fsize;
-      size_t wrap = BELT_SIZE;
-      BELT_T* belt = frame.fast;
-      if (beltLocation >= BELT_SIZE)
+      else
        {
-         front = frame.sfront;
-         size = frame.ssize;
-         wrap = BELT_SIZE;
-         belt = frame.slow;
-         beltLocation -= BELT_SIZE;
+         if (((beltLocation & 0x1F) > frame.ssize) && (beltLocation < 62))
+          {
+            return INVALID;
+          }
+         return frame.slow[(frame.sfront + beltLocation) & 0x1F];
        }
-      if (beltLocation > size)
-       {
-         return INVALID;
-       }
-      size_t phys = front + beltLocation;
-      if (phys >= wrap)
-       {
-         phys -= wrap;
-       }
-      return belt[phys];
-    }
-
-   BELT_T getBeltContent(size_t beltLocation)
-    {
-      return getBeltContent(machine->frames.back(), beltLocation);
     }
 
    bool extraNumerical(BELT_T op, BELT_T& res)
@@ -325,154 +302,78 @@ public:
 
    bool conditionTrue(BELT_T cond, BELT_T flags)
     {
+      if (0U != (cond & ~0xFLL))
+       {
+         std::printf("Arrived in conditionTrue with invalid condition code.\nThis is a bug.\n");
+         machine->invalidOp = true;
+         return false;
+       }
+/*
       switch (cond)
        {
          case 0: // ALWAYS
-            return true;
-         case 1: // CARRY
-            if (0U != (flags & CARRY))
-            {
-               return true;
-            }
-            return false;
-         case 2: // NO CARRY
-            if (0U == (flags & CARRY))
-            {
-               return true;
-            }
-            return false;
-         case 3: // Signed Overflow
-            if (0U != (flags & OVERFLOW))
-            {
-               return true;
-            }
-            return false;
-         case 4: // No Signed Overflow
-            if (0U == (flags & OVERFLOW))
-            {
-               return true;
-            }
-            return false;
-         case 5: // NEGATIVE (Less)
-            if (0U != (flags & NEGATIVE))
-            {
-               return true;
-            }
-            return false;
-         case 6: // NOT NEGATIVE (Greater than or equal) (Zero or Positive)
-            if (0U == (flags & NEGATIVE))
-            {
-               return true;
-            }
-            return false;
-         case 7: // ZERO
-            if (0U != (flags & ZERO))
-            {
-               return true;
-            }
-            return false;
-         case 8: // NOT ZERO
-            if (0U == (flags & ZERO))
-            {
-               return true;
-            }
-            return false;
-         case 9: // POSITIVE (Greater) (Not Zero and Not Negative)
-            if (0U == (flags & (ZERO | NEGATIVE)))
-            {
-               return true;
-            }
-            return false;
+         case 1: // DEFINITE : NOT INVALID AND NOT TRANSIENT
+         case 2: // CARRY
+         case 3: // NO CARRY
+         case 4: // Signed Overflow
+         case 5: // No Signed Overflow
+         case 6: // NEGATIVE (Less)
+         case 7: // NOT NEGATIVE (Greater than or equal) (Zero or Positive)
+         case 8: // ZERO
+         case 9: // NOT ZERO
          case 10: // NOT POSITIVE (Less Than or Equal) (Zero or Negative)
-            if (0U != (flags & (ZERO | NEGATIVE)))
-            {
-               return true;
-            }
-            return false;
-         case 11: // INVALID
-            if (0U != (flags & INVALID))
-            {
-               return true;
-            }
-            return false;
-         case 12: // NOT INVALID
-            if (0U == (flags & INVALID))
-            {
-               return true;
-            }
-            return false;
-         case 13: // TRANSIENT
-            if (0U != (flags & TRANSIENT))
-            {
-               return true;
-            }
-            return false;
-         case 14: // NOT TRANSIENT
-            if (0U == (flags & TRANSIENT))
-            {
-               return true;
-            }
-            return false;
-         case 15: // DEFINITE : NOT INVALID AND NOT TRANSIENT
-            if (0U == (flags & (INVALID | TRANSIENT)))
-            {
-               return true;
-            }
-            return false;
+         case 11: // POSITIVE (Greater) (Not Zero and Not Negative)
+         case 12: // INVALID
+         case 13: // NOT INVALID
+         case 14: // TRANSIENT
+         case 15: // NOT TRANSIENT
        }
-      std::printf("Arrived in conditionTrue with invalid condition code.\nThis is a bug.\n");
-      machine->invalidOp = true;
-      return false;
+*/
+      BELT_T conds [] = { 0U, CARRY, OVERFLOW, NEGATIVE, ZERO, ZERO | NEGATIVE, INVALID, TRANSIENT };
+      if (0 == cond)
+       {
+         return true;
+       }
+      else if (1 == cond)
+       {
+         return (0U == (flags & (INVALID | TRANSIENT)));
+       }
+      else
+       {
+         if (0U == (cond & 1))
+          {
+            return (0U != (flags & conds[cond >> 1]));
+          }
+         else
+          {
+            return (0U == (flags & conds[cond >> 1]));
+          }
+       }
     }
 
    static void retire(Frame& frame, BELT_T value)
     {
-      if (0U != frame.ffront)
-       {
-         --frame.ffront;
-       }
-      else
-       {
-         frame.ffront = BELT_SIZE - 1;
-       }
+      frame.ffront = (frame.ffront - 1) & 0x1F;
       frame.fast[frame.ffront] = value;
-      if (frame.fsize != BELT_SIZE)
-       {
-         ++frame.fsize;
-       }
-    }
+      frame.fsize = frame.fsize < BELT_SIZE ? frame.fsize + 1 : BELT_SIZE;
 
-   void retire(BELT_T value)
-    {
-      retire(machine->frames.back(), value);
+      frame.fast[(frame.ffront + 30) & 0x1F] = ZERO;
+      frame.fast[(frame.ffront + 31) & 0x1F] = 1;
     }
 
    static void slowretire(Frame& frame, BELT_T value)
     {
-      if (0U != frame.sfront)
-       {
-         --frame.sfront;
-       }
-      else
-       {
-         frame.sfront = BELT_SIZE - 1;
-       }
+      frame.sfront = (frame.sfront - 1) & 0x1F;
       frame.slow[frame.sfront] = value;
-      if (frame.ssize != BELT_SIZE)
-       {
-         ++frame.ssize;
-       }
+      frame.ssize = frame.ssize < BELT_SIZE ? frame.ssize + 1 : BELT_SIZE;
+
+      frame.slow[(frame.sfront + 30) & 0x1F] = INVALID;
+      frame.slow[(frame.sfront + 31) & 0x1F] = TRANSIENT;
     }
 
-   void slowretire(BELT_T value)
-    {
-      slowretire(machine->frames.back(), value);
-    }
-
-   void fillBelt(int num, BELT_T* rets)
+   void fillBelt(Frame& frame, int num, BELT_T* rets)
     {
       BELT_T cur = 0U;
-      Frame& frame = machine->frames.back();
       for (int i = 0; i < num; ++i)
        {
          if (0 == (i % 4))
@@ -490,7 +391,7 @@ public:
                return;
              }
           }
-         rets[i] = getBeltContent((cur >> (5 + 6 * (i % 4))) & 0x3F);
+         rets[i] = getBeltContent(frame, (cur >> (5 + 6 * (i % 4))) & 0x3F);
        }
     }
 
@@ -565,15 +466,15 @@ x: \
 #define REG_OP_INTRO \
          BELT_T cond, src, op1, op2, temp; \
          cond = (curOp >> 6) & 0xF; \
-         src = getBeltContent((curOp >> 10) & 0x3F); \
-         op1 = getBeltContent((curOp >> 16) & 0x3F); \
-         op2 = getBeltContent((curOp >> 22) & 0x3F);
+         src = getBeltContent(*frame, (curOp >> 10) & 0x3F); \
+         op1 = getBeltContent(*frame, (curOp >> 16) & 0x3F); \
+         op2 = getBeltContent(*frame, (curOp >> 22) & 0x3F);
 
 #define IMM_OP_INTRO \
          BELT_T cond, src, op1, op2, temp; \
          cond = 0; /* Unconditional */ \
          src = 0; \
-         op1 = getBeltContent((curOp >> 6) & 0x3F); \
+         op1 = getBeltContent(*frame, (curOp >> 6) & 0x3F); \
          op2 = (curOp >> 12) & 0x7FFFF; \
          if (op2 & 0x40000) \
           { \
@@ -581,34 +482,34 @@ x: \
           }
 
 #define LONG_OP_INTRO \
-         BELT_T op1 = getBeltContent((curOp >> 10) & 0x3F); \
-         BELT_T op2 = getBeltContent((curOp >> 16) & 0x3F); \
-         BELT_T op3 = getBeltContent((curOp >> 22) & 0x3F); \
+         BELT_T op1 = getBeltContent(*frame, (curOp >> 10) & 0x3F); \
+         BELT_T op2 = getBeltContent(*frame, (curOp >> 16) & 0x3F); \
+         BELT_T op3 = getBeltContent(*frame, (curOp >> 22) & 0x3F); \
          BELT_T temp;
 
 #define TOCK_OP_INTRO \
          BELT_T cond, src, num, op1, op2, temp; \
          cond = (curOp >> 5) & 0xF; \
-         src = getBeltContent((curOp >> 9) & 0x3F); \
+         src = getBeltContent(*frame, (curOp >> 9) & 0x3F); \
          num = (curOp >> 15) & 0x3F; \
-         op1 = getBeltContent(num); \
-         op2 = getBeltContent((curOp >> 21) & 0x3F);
+         op1 = getBeltContent(*frame, num); \
+         op2 = getBeltContent(*frame, (curOp >> 21) & 0x3F);
 
 #define OP_BASE_CASES_FAST \
          if (false == conditionTrue(cond, src)) \
           { \
-            retire(TRANSIENT | frame->pc); \
+            retire(*frame, TRANSIENT | frame->pc); \
             if ((9 == (curOp & 0xF)) || (10 == (curOp & 0xF))) \
              { \
-               retire(TRANSIENT | frame->pc); \
+               retire(*frame, TRANSIENT | frame->pc); \
              } \
           } \
          else if (true == extraNumerical(op1, op2, temp)) \
           { \
-            retire(temp); \
+            retire(*frame, temp); \
             if ((9 == (curOp & 0xF)) || (10 == (curOp & 0xF))) \
              { \
-               retire(temp); \
+               retire(*frame, temp); \
              } \
           } \
          else \
@@ -617,18 +518,18 @@ x: \
 #define OP_BASE_CASES_SLOW \
          if (false == conditionTrue(cond, src)) \
           { \
-            slowretire(TRANSIENT | frame->pc); \
+            slowretire(*frame, TRANSIENT | frame->pc); \
             if ((9 == (curOp & 0xF)) || (10 == (curOp & 0xF))) \
              { \
-               slowretire(TRANSIENT | frame->pc); \
+               slowretire(*frame, TRANSIENT | frame->pc); \
              } \
           } \
          else if (true == extraNumerical(op1, op2, temp)) \
           { \
-            slowretire(temp); \
+            slowretire(*frame, temp); \
             if ((9 == (curOp & 0xF)) || (10 == (curOp & 0xF))) \
              { \
-               slowretire(temp); \
+               slowretire(*frame, temp); \
              } \
           } \
          else \
@@ -683,11 +584,11 @@ x: \
 
 #define RETIRE(x) \
             x |= getZero(x); \
-            retire(x);
+            retire(*frame, x);
 
 #define SLOWRETIRE(x) \
             x |= getZero(x); \
-            slowretire(x);
+            slowretire(*frame, x);
 
          MACHINE_START
          DISPATCH_NEXT_TICK
@@ -703,7 +604,7 @@ LONG_OP_INTRO
             temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, op3);
             temp |= getZero(temp);
           }
-         retire(temp);
+         retire(*frame, temp);
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
 
@@ -714,7 +615,7 @@ LONG_OP_INTRO
             temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, op3 ^ CARRY) ^ CARRY;
             temp |= getZero(temp);
           }
-         retire(temp);
+         retire(*frame, temp);
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
 
@@ -723,8 +624,8 @@ LONG_OP_INTRO
          (void) op3;
          if (true == extraNumerical(op1, op2, temp))
           {
-            retire(temp);
-            retire(temp);
+            retire(*frame, temp);
+            retire(*frame, temp);
           }
          else
           {
@@ -741,16 +642,16 @@ OP_INTRO(DIVLF)
 LONG_OP_INTRO
          if (true == extraNumerical(op1, op2, op3, temp))
           {
-            retire(temp);
-            retire(temp);
+            retire(*frame, temp);
+            retire(*frame, temp);
           }
          else
           {
             if (0U == (op3 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               retire(temp);
-               retire(temp);
+               retire(*frame, temp);
+               retire(*frame, temp);
              }
             else
              {
@@ -772,11 +673,11 @@ LONG_OP_INTRO
          (void) temp;
          if (conditionTrue((curOp >> 6) & 0xF, op1))
           {
-            retire(op2);
+            retire(*frame, op2);
           }
          else
           {
-            retire(op3);
+            retire(*frame, op3);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -819,8 +720,8 @@ OP_BASE_CASES_FAST
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               retire(temp);
-               retire(temp);
+               retire(*frame, temp);
+               retire(*frame, temp);
              }
             else
              {
@@ -854,8 +755,8 @@ OP_BASE_CASES_FAST
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               retire(temp);
-               retire(temp);
+               retire(*frame, temp);
+               retire(*frame, temp);
              }
             else
              {
@@ -1021,8 +922,8 @@ OP_BASE_CASES_FAST
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               retire(temp);
-               retire(temp);
+               retire(*frame, temp);
+               retire(*frame, temp);
              }
             else
              {
@@ -1056,8 +957,8 @@ OP_BASE_CASES_FAST
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               retire(temp);
-               retire(temp);
+               retire(*frame, temp);
+               retire(*frame, temp);
              }
             else
              {
@@ -1186,7 +1087,7 @@ LONG_OP_INTRO
             temp = getAdd(op1 & 0xFFFFFFFFLL, op2 & 0xFFFFFFFFLL, op3);
             temp |= getZero(temp);
           }
-         slowretire(temp);
+         slowretire(*frame, temp);
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
 
@@ -1197,7 +1098,7 @@ LONG_OP_INTRO
             temp = getAdd(op1 & 0xFFFFFFFFLL, (op2 & 0xFFFFFFFFLL) ^ 0xFFFFFFFFLL, op3 ^ CARRY) ^ CARRY;
             temp |= getZero(temp);
           }
-         slowretire(temp);
+         slowretire(*frame, temp);
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
 
@@ -1206,8 +1107,8 @@ LONG_OP_INTRO
          (void) op3;
          if (true == extraNumerical(op1, op2, temp))
           {
-            slowretire(temp);
-            slowretire(temp);
+            slowretire(*frame, temp);
+            slowretire(*frame, temp);
           }
          else
           {
@@ -1224,16 +1125,16 @@ OP_INTRO(DIVLS)
 LONG_OP_INTRO
          if (true == extraNumerical(op1, op2, op3, temp))
           {
-            slowretire(temp);
-            slowretire(temp);
+            slowretire(*frame, temp);
+            slowretire(*frame, temp);
           }
          else
           {
             if (0U == (op3 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               slowretire(temp);
-               slowretire(temp);
+               slowretire(*frame, temp);
+               slowretire(*frame, temp);
              }
             else
              {
@@ -1255,11 +1156,11 @@ LONG_OP_INTRO
          (void) temp;
          if (conditionTrue((curOp >> 6) & 0xF, op1))
           {
-            slowretire(op2);
+            slowretire(*frame, op2);
           }
          else
           {
-            slowretire(op3);
+            slowretire(*frame, op3);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TICK
@@ -1302,8 +1203,8 @@ OP_BASE_CASES_SLOW
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               slowretire(temp);
-               slowretire(temp);
+               slowretire(*frame, temp);
+               slowretire(*frame, temp);
              }
             else
              {
@@ -1337,8 +1238,8 @@ OP_BASE_CASES_SLOW
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               slowretire(temp);
-               slowretire(temp);
+               slowretire(*frame, temp);
+               slowretire(*frame, temp);
              }
             else
              {
@@ -1498,8 +1399,8 @@ OP_BASE_CASES_SLOW
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               slowretire(temp);
-               slowretire(temp);
+               slowretire(*frame, temp);
+               slowretire(*frame, temp);
              }
             else
              {
@@ -1533,8 +1434,8 @@ OP_BASE_CASES_SLOW
             if (0U == (op2 & 0xFFFFFFFFLL))
              {
                temp = INVALID | frame->pc;
-               slowretire(temp);
-               slowretire(temp);
+               slowretire(*frame, temp);
+               slowretire(*frame, temp);
              }
             else
              {
@@ -1699,11 +1600,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            retire(temp);
+            retire(*frame, temp);
           }
          else
           {
-            retire(TRANSIENT | frame->pc);
+            retire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1734,11 +1635,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            retire(temp);
+            retire(*frame, temp);
           }
          else
           {
-            retire(TRANSIENT | frame->pc);
+            retire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1769,11 +1670,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            retire(temp);
+            retire(*frame, temp);
           }
          else
           {
-            retire(TRANSIENT | frame->pc);
+            retire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1869,13 +1770,17 @@ TOCK_OP_INTRO
           {
             BELT_T belt [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
             frame->ffront = 0U;
             frame->fsize = 0U;
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
              {
-               retire(belt[i]);
+               retire(*frame, belt[i]);
              }
+          }
+         else
+          {
+            frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -1887,7 +1792,7 @@ TOCK_OP_INTRO
           {
             BELT_T belt [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
 
             if (1U != machine->frames.size())
              {
@@ -1963,7 +1868,7 @@ TOCK_OP_INTRO
             frame->callOp = curOp;
             BELT_T belt [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
 
             machine->frames.push_back(Frame());
             Frame* prevFrame = &machine->frames[machine->frames.size() - 2U]; // Don't use frame
@@ -1981,7 +1886,7 @@ TOCK_OP_INTRO
           {
             for (int i = 0; i < op2; ++i)
              {
-               retire(TRANSIENT | frame->pc); // ensure TRANSIENT
+               retire(*frame, TRANSIENT | frame->pc); // ensure TRANSIENT
              }
             frame->pc += 1U + num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
@@ -2000,7 +1905,7 @@ TOCK_OP_INTRO
                frame->callOp = curOp;
                BELT_T belt [BELT_SIZE];
                for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
-               fillBelt(num, belt);
+               fillBelt(*frame, num, belt);
 
                machine->frames.push_back(Frame());
                Frame* prevFrame = &machine->frames[machine->frames.size() - 2U]; // Don't use frame
@@ -2029,7 +1934,7 @@ TOCK_OP_INTRO
              }
             for (int i = 0; i < op2; ++i)
              {
-               retire(op1); // ensure TRANSIENT
+               retire(*frame, op1); // ensure TRANSIENT
              }
             frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
@@ -2046,7 +1951,7 @@ TOCK_OP_INTRO
             BELT_T belt [BELT_SIZE], rets [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & rets[i])); ++i)
              {
@@ -2057,7 +1962,7 @@ TOCK_OP_INTRO
           {
             for (int i = 0; i < op2; ++i)
              {
-               retire(TRANSIENT | frame->pc);
+               retire(*frame, TRANSIENT | frame->pc);
              }
             frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }
@@ -2081,11 +1986,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            slowretire(temp);
+            slowretire(*frame, temp);
           }
          else
           {
-            slowretire(TRANSIENT | frame->pc);
+            slowretire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -2116,11 +2021,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            slowretire(temp);
+            slowretire(*frame, temp);
           }
          else
           {
-            slowretire(TRANSIENT | frame->pc);
+            slowretire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -2151,11 +2056,11 @@ TOCK_OP_INTRO
                   temp |= frame->pc;
                 }
              }
-            slowretire(temp);
+            slowretire(*frame, temp);
           }
          else
           {
-            slowretire(TRANSIENT | frame->pc);
+            slowretire(*frame, TRANSIENT | frame->pc);
           }
 LONG_OP_CASE_END
 DISPATCH_NEXT_FROM_TOCK
@@ -2167,12 +2072,12 @@ TOCK_OP_INTRO
           {
             BELT_T belt [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
             frame->sfront = 0U;
             frame->ssize = 0U;
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & belt[i])); ++i)
              {
-               slowretire(belt[i]);
+               slowretire(*frame, belt[i]);
              }
           }
          else
@@ -2217,7 +2122,7 @@ TOCK_OP_INTRO
             BELT_T belt [BELT_SIZE], rets [BELT_SIZE];
             for (size_t i = 0U; i < BELT_SIZE; ++i) belt[i] = EMPTY;
             for (size_t i = 0U; i < BELT_SIZE; ++i) rets[i] = EMPTY;
-            fillBelt(num, belt);
+            fillBelt(*frame, num, belt);
             serviceInterrupt(*machine, op1, belt, rets);
             for (size_t i = 0U; (i < BELT_SIZE) && (0U == (EMPTY & rets[i])); ++i)
              {
@@ -2228,7 +2133,7 @@ TOCK_OP_INTRO
           {
             for (int i = 0; i < op2; ++i)
              {
-               slowretire(TRANSIENT | frame->pc);
+               slowretire(*frame, TRANSIENT | frame->pc);
              }
             frame->pc += num / 4 + ((0 != (num % 4)) ? 1 : 0);
           }

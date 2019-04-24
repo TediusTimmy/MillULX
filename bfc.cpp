@@ -477,9 +477,9 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
             surpressTick(compiledBlocks.back());
             compiledBlocks.back().push_back(Dispatch(ldb(dp) | NO_TICK));
             dp = changeDP(dp, 1, i, j);
-            compiledBlocks.back().push_back(Dispatch(calli(8, 0, 1, 1)).Dest(converts[i][j].loop).Args(dp));
+            compiledBlocks.back().push_back(Dispatch(calli(9, 0, 1, 1)).Dest(converts[i][j].loop).Args(dp));
             dp = changeDP(dp, 1, i, j);
-            compiledBlocks.back().push_back(Dispatch(pick(14, 0, 0, dp) | NO_TICK));
+            compiledBlocks.back().push_back(Dispatch(pick(15, 0, 0, dp) | NO_TICK));
             dp = changeDP(dp, -dp, i, j);
             break;
           }
@@ -502,7 +502,7 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
        {
          compiledBlocks.back().push_back(Dispatch(ldb(dp) | NO_TICK));
          dp = changeDP(dp, 1, i, 0xFFFFFFFF);
-         compiledBlocks.back().push_back(Dispatch(ret(7, 0, 1)).Args(dp));
+         compiledBlocks.back().push_back(Dispatch(ret(8, 0, 1)).Args(dp));
          compiledBlocks.back().push_back(Dispatch(addi(dp, 0)));
          compiledBlocks.back().push_back(Dispatch(jmpi()));
        }
