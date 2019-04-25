@@ -29,6 +29,7 @@ The actual metadata that gets stored are these things:
 
 This gives these conditions for conditional branches:
 * always branch
+* not invalid and not transient : definite
 * carry/borrow generated, unsigned overflow
 * no carry/borrow/unsigned overflow
 * signed overflow
@@ -37,13 +38,12 @@ This gives these conditions for conditional branches:
 * result not negative, zero or positive, greater than or equal
 * zero
 * non-zero
-* result positive, greater
 * result not positive, zero or negative, less than or equal
+* result positive, greater
 * invalid
 * not invalid
 * transient
 * not transient
-* not invalid and not transient : definite
 
 
 #### Instructions

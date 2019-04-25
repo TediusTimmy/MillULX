@@ -35,21 +35,21 @@ typedef unsigned int MEM_T;
 enum COND
  {
    C_ALWAYS             =  0,
-   C_CARRY              =  1,
-   C_NO_CARRY           =  2,
-   C_SIGNED_OVERFLOW    =  3,
-   C_NO_SIGNED_OVERFLOW =  4,
-   C_NEGATIVE           =  5,
-   C_NOT_NEGATIVE       =  6,
-   C_ZERO               =  7,
-   C_NOT_ZERO           =  8,
-   C_POSITIVE           =  9,
+   C_DEFINITE           =  1,
+   C_CARRY              =  2,
+   C_NO_CARRY           =  3,
+   C_SIGNED_OVERFLOW    =  4,
+   C_NO_SIGNED_OVERFLOW =  5,
+   C_NEGATIVE           =  6,
+   C_NOT_NEGATIVE       =  7,
+   C_ZERO               =  8,
+   C_NOT_ZERO           =  9,
    C_NOT_POSITIVE       = 10,
-   C_INVALID            = 11,
-   C_NOT_INVALID        = 12,
-   C_TRANSIENT          = 13,
-   C_NOT_TRANSIENT      = 14,
-   C_DEFINITE           = 15
+   C_POSITIVE           = 11,
+   C_INVALID            = 12,
+   C_NOT_INVALID        = 13,
+   C_TRANSIENT          = 14,
+   C_NOT_TRANSIENT      = 15
  };
 
 enum DEST_BELT

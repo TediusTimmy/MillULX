@@ -520,9 +520,9 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
          case '[':
             compiledBlocks.back().push_back(Dispatch(subi(30, converts[i][j].loop), nop(), ldb(dp))); // Flag the offset for calls as special
             dp = changeDP(dp, 2, i, j);
-            compiledBlocks.back().push_back(Dispatch(nop(), nop(), call(8, 0, 1, 1, 1)).Args(dp));
+            compiledBlocks.back().push_back(Dispatch(nop(), nop(), call(9, 0, 1, 1, 1)).Args(dp));
             dp = changeDP(dp, 1, i, j);
-            compiledBlocks.back().push_back(Dispatch(nop(), pick(14, 0, 0, dp), nop()));
+            compiledBlocks.back().push_back(Dispatch(nop(), pick(15, 0, 0, dp), nop()));
             dp = changeDP(dp, -dp, i, j);
             break;
           }
@@ -538,7 +538,7 @@ void compile1(const std::vector<std::vector<Form2> >& converts, std::vector<std:
        {
          compiledBlocks.back().push_back(Dispatch(nop(), nop(), ldb(dp)));
          dp = changeDP(dp, 1, i, 0xFFFFFFFF);
-         compiledBlocks.back().push_back(Dispatch(addi(dp, 0), nop(), ret(7, 0, 1)).Args(dp));
+         compiledBlocks.back().push_back(Dispatch(addi(dp, 0), nop(), ret(8, 0, 1)).Args(dp));
          compiledBlocks.back().push_back(Dispatch(nop(), nop(), jmpi()));
        }
     }

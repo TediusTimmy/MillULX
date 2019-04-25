@@ -51,9 +51,9 @@ These are property of Mill Computing, Inc.
 typedef long long BELT_T;
 typedef unsigned int MEM_T;
 
-static const size_t FAST_BELT_SIZE = 32U;
-static const size_t SLOW_BELT_SIZE = 32U;
-static const size_t BIG_BELT_SIZE = 32U;
+static const size_t FAST_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
+static const size_t SLOW_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
+static const size_t BIG_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
 static const size_t ALUNITS = 2U;
 static const size_t ALU_RETIRE_SIZE = 2U;
 static const size_t FLOW_UNITS = 1U;
@@ -307,48 +307,25 @@ public:
 
    static BELT_T getBeltContent(Frame& frame, size_t beltLocation)
     {
-      // This implementation retains stale values on the belt that get hidden. I don't like it.
-      switch (beltLocation)
+      if (0U == (beltLocation & 0x20))
        {
-         case 30:
-            return ZERO;
-         case 31:
-            return 1;
-         case 62:
+         if ((beltLocation > frame.fsize) && (beltLocation < 30))
+          {
             return INVALID;
-         case 63:
-            return TRANSIENT;
+          }
+         return frame.fast[(frame.ffront + beltLocation) & 0x1F];
        }
-      size_t front = frame.ffront;
-      size_t size = frame.fsize;
-      size_t wrap = FAST_BELT_SIZE;
-      BELT_T* belt = frame.fast;
-      if (beltLocation >= FAST_BELT_SIZE)
+      else
        {
-         front = frame.sfront;
-         size = frame.ssize;
-         wrap = SLOW_BELT_SIZE;
-         belt = frame.slow;
-         beltLocation -= FAST_BELT_SIZE;
+         if (((beltLocation & 0x1F) > frame.ssize) && (beltLocation < 62))
+          {
+            return INVALID;
+          }
+         return frame.slow[(frame.sfront + beltLocation) & 0x1F];
        }
-      if (beltLocation > size)
-       {
-         return INVALID;
-       }
-      size_t phys = front + beltLocation;
-      if (phys >= wrap)
-       {
-         phys -= wrap;
-       }
-      return belt[phys];
     }
 
-   BELT_T getBeltContent(size_t beltLocation)
-    {
-      return getBeltContent(machine->frames.back(), beltLocation);
-    }
-
-   bool extraNumerical(BELT_T op, BELT_T& res)
+   static bool extraNumerical(BELT_T op, BELT_T& res)
     {
       if (0L != (op & (TRANSIENT | INVALID)))
        {
@@ -358,7 +335,7 @@ public:
       return false;
     }
 
-   bool extraNumerical(BELT_T op1, BELT_T op2, BELT_T& res)
+   static bool extraNumerical(BELT_T op1, BELT_T op2, BELT_T& res)
     {
       if (0L != ((op1 & op2) & TRANSIENT))
        {
@@ -393,7 +370,7 @@ public:
       return false;
     }
 
-   bool extraNumerical(BELT_T op1, BELT_T op2, BELT_T op3, BELT_T& res)
+   static bool extraNumerical(BELT_T op1, BELT_T op2, BELT_T op3, BELT_T& res)
     {
       BELT_T temp = TRANSIENT;
       bool result = false;
@@ -449,7 +426,7 @@ public:
       return 0;
     }
 
-   BELT_T getAdd(BELT_T op1, BELT_T op2, BELT_T op3)
+   static BELT_T getAdd(BELT_T op1, BELT_T op2, BELT_T op3)
     {
       BELT_T cb = (op3 & CARRY) ? 1 : 0;
       BELT_T result = (op1 + op2 + cb) & 0x1FFFFFFFFLL; // CARRY/BORROW is free
@@ -462,104 +439,32 @@ public:
 
    bool conditionTrue(BELT_T cond, BELT_T flags)
     {
-      switch (cond)
+      if (0U != (cond & ~0xFLL))
        {
-         case 0: // ALWAYS
-            return true;
-         case 1: // CARRY
-            if (0U != (flags & CARRY))
-            {
-               return true;
-            }
-            return false;
-         case 2: // NO CARRY
-            if (0U == (flags & CARRY))
-            {
-               return true;
-            }
-            return false;
-         case 3: // Signed Overflow
-            if (0U != (flags & OVERFLOW))
-            {
-               return true;
-            }
-            return false;
-         case 4: // No Signed Overflow
-            if (0U == (flags & OVERFLOW))
-            {
-               return true;
-            }
-            return false;
-         case 5: // NEGATIVE (Less)
-            if (0U != (flags & NEGATIVE))
-            {
-               return true;
-            }
-            return false;
-         case 6: // NOT NEGATIVE (Greater than or equal) (Zero or Positive)
-            if (0U == (flags & NEGATIVE))
-            {
-               return true;
-            }
-            return false;
-         case 7: // ZERO
-            if (0U != (flags & ZERO))
-            {
-               return true;
-            }
-            return false;
-         case 8: // NOT ZERO
-            if (0U == (flags & ZERO))
-            {
-               return true;
-            }
-            return false;
-         case 9: // POSITIVE (Greater) (Not Zero and Not Negative)
-            if (0U == (flags & (ZERO | NEGATIVE)))
-            {
-               return true;
-            }
-            return false;
-         case 10: // NOT POSITIVE (Less Than or Equal) (Zero or Negative)
-            if (0U != (flags & (ZERO | NEGATIVE)))
-            {
-               return true;
-            }
-            return false;
-         case 11: // INVALID
-            if (0U != (flags & INVALID))
-            {
-               return true;
-            }
-            return false;
-         case 12: // NOT INVALID
-            if (0U == (flags & INVALID))
-            {
-               return true;
-            }
-            return false;
-         case 13: // TRANSIENT
-            if (0U != (flags & TRANSIENT))
-            {
-               return true;
-            }
-            return false;
-         case 14: // NOT TRANSIENT
-            if (0U == (flags & TRANSIENT))
-            {
-               return true;
-            }
-            return false;
-         case 15: // DEFINITE : NOT INVALID AND NOT TRANSIENT
-            if (0U == (flags & (INVALID | TRANSIENT)))
-            {
-               return true;
-            }
-            return false;
+         std::printf("Arrived in conditionTrue with invalid condition code.\nThis is a bug.\n");
+         machine->invalidOp = true;
+         return false;
        }
-      std::printf("Arrived in conditionTrue with invalid condition code.\nThis is a bug.\n");
-      machine->invalidOp = true;
-      return false;
+      static const BELT_T conds [] = { 0U, CARRY, OVERFLOW, NEGATIVE, ZERO, ZERO | NEGATIVE, INVALID, TRANSIENT };
+      if (0 == cond)
+       {
+         return true;
+       }
+      else if (1 == cond)
+       {
+         return (0U == (flags & (INVALID | TRANSIENT)));
+       }
+      else
+       {
+         if (0U == (cond & 1))
+          {
+            return (0U != (flags & conds[cond >> 1]));
+          }
+         else
+          {
+            return (0U == (flags & conds[cond >> 1]));
+          }
+       }
     }
  };
 
@@ -598,16 +503,16 @@ public:
                if (0 == (curOp & 0x10))
                 {
                   cond = (curOp >> 6) & 0xF;
-                  src = getBeltContent((curOp >> 10) & 0x3F);
-                  op1 = getBeltContent((curOp >> 16) & 0x3F);
-                  op2 = getBeltContent((curOp >> 22) & 0x3F);
+                  src = getBeltContent(frame, (curOp >> 10) & 0x3F);
+                  op1 = getBeltContent(frame, (curOp >> 16) & 0x3F);
+                  op2 = getBeltContent(frame, (curOp >> 22) & 0x3F);
                   retire.nops = (curOp >> 28) & 0x7;
                 }
                else
                 {
                   cond = 0; // Unconditional
                   src = 0;
-                  op1 = getBeltContent((curOp >> 6) & 0x3F);
+                  op1 = getBeltContent(frame, (curOp >> 6) & 0x3F);
                   op2 = (curOp >> 12) & 0x1FFFF;
                   if (op2 & 0x10000)
                    {
@@ -798,9 +703,9 @@ public:
                 {
                   dest = retire.slow;
                 }
-               BELT_T op1 = getBeltContent((curOp >> 10) & 0x3F);
-               BELT_T op2 = getBeltContent((curOp >> 16) & 0x3F);
-               BELT_T op3 = getBeltContent((curOp >> 22) & 0x3F);
+               BELT_T op1 = getBeltContent(frame, (curOp >> 10) & 0x3F);
+               BELT_T op2 = getBeltContent(frame, (curOp >> 16) & 0x3F);
+               BELT_T op3 = getBeltContent(frame, (curOp >> 22) & 0x3F);
                BELT_T temp;
                retire.nops = (curOp >> 28) & 0x7;
                switch (curOp & 0x1F)
@@ -902,11 +807,10 @@ class FlowUnit : public FunctionalUnit
  {
 public:
 
-   void fillBelt(int num)
+   void fillBelt(Frame& frame, int num)
     {
       int memOff = -1; // Start at the current instruction
       BELT_T cur = 0U; // If cur is used uninitialized, that is a bug in the compiler.
-      Frame& frame = machine->frames.back();
       FlowRetire& retire = frame.flow_retire[slot];
       for (int i = 0; i < num; ++i)
        {
@@ -923,7 +827,7 @@ public:
                machine->invalidOp = true;
              }
           }
-         retire.belt[i] = getBeltContent((cur >> (5 + 6 * (i % 4))) & 0x3F);
+         retire.belt[i] = getBeltContent(frame, (cur >> (5 + 6 * (i % 4))) & 0x3F);
        }
     }
 
@@ -979,10 +883,10 @@ public:
             BELT_T cond, src, num, op1, op2, temp;
             BELT_T* dest;
             cond = (curOp >> 5) & 0xF;
-            src = getBeltContent((curOp >> 9) & 0x3F);
+            src = getBeltContent(frame, (curOp >> 9) & 0x3F);
             num = (curOp >> 15) & 0x3F;
-            op1 = getBeltContent(num);
-            op2 = getBeltContent((curOp >> 21) & 0x3F);
+            op1 = getBeltContent(frame, num);
+            op2 = getBeltContent(frame, (curOp >> 21) & 0x3F);
             dest = retire.fast;
             if (curOp & 0x10)
              {
@@ -1175,7 +1079,7 @@ public:
                   if (conditionTrue(cond, src))
                    {
                      retire.use = (0 == (curOp & 0x10)) ? CANON : SLOW_CANON;
-                     fillBelt(num);
+                     fillBelt(frame, num);
                    }
                   retire.next = num / 4 + ((0 != (num % 4)) ? 1 : 0);
                   retire.nops = (curOp >> 27) & 0x7;
@@ -1184,14 +1088,14 @@ public:
                   if (conditionTrue(cond, src))
                    {
                      retire.use = SIGNAL_RETURN;
-                     fillBelt(num);
+                     fillBelt(frame, num);
                    }
                   retire.next = num / 4 + ((0 != (num % 4)) ? 1 : 0);
                   retire.nops = (curOp >> 27) & 0x7;
                   break;
                case 10: // JMPI
                   cond = (curOp >> 4) & 0xF;
-                  src = getBeltContent((curOp >> 8) & 0x3F);
+                  src = getBeltContent(frame, (curOp >> 8) & 0x3F);
                   if (conditionTrue(cond, src))
                    {
                      temp = (curOp >> 14) & 0x7FFF;
@@ -1223,13 +1127,13 @@ public:
                      machine->invalidOp = true;
                    }
                   retire.use = SIGNAL_CALL;
-                  fillBelt(num);
+                  fillBelt(frame, num);
                   retire.nops = (curOp >> 29) & 0x7;
                   break;
                case 12: // CALL
                   cond = (curOp >> 4) & 0xF;
-                  src = getBeltContent((curOp >> 8) & 0x3F);
-                  op1 = getBeltContent((curOp >> 14) & 0x3F);
+                  src = getBeltContent(frame, (curOp >> 8) & 0x3F);
+                  op1 = getBeltContent(frame, (curOp >> 14) & 0x3F);
                   num = (curOp >> 20) & 0x1F;
                   op2 = (curOp >> 25) & 0x1F;
                   retire.nops = (curOp >> 30) & 0x3;
@@ -1245,7 +1149,7 @@ public:
                            machine->invalidOp = true;
                          }
                         retire.use = SIGNAL_CALL;
-                        fillBelt(num);
+                        fillBelt(frame, num);
                       }
                      else
                       {
@@ -1267,7 +1171,7 @@ public:
                   break;
                case 13: // INT
                   cond = (curOp >> 4) & 0xF;
-                  src = getBeltContent((curOp >> 8) & 0x3F);
+                  src = getBeltContent(frame, (curOp >> 8) & 0x3F);
                   op1 = (curOp >> 14) & 0x3F;
                   num = (curOp >> 20) & 0x1F;
                   op2 = (curOp >> 25) & 0x1F;
@@ -1275,7 +1179,7 @@ public:
                   retire.next = num / 4 + ((0 != (num % 4)) ? 1 : 0);
                   if (conditionTrue(cond, src))
                    {
-                     fillBelt(num);
+                     fillBelt(frame, num);
                      serviceInterrupt(*machine, op1, retire.belt, retire.fast);
                    }
                   else
@@ -1321,37 +1225,22 @@ public:
 
    void retire(Frame& frame, BELT_T value)
     {
-      if (0U != frame.ffront)
-       {
-         --frame.ffront;
-       }
-      else
-       {
-         frame.ffront = FAST_BELT_SIZE - 1;
-       }
+      frame.ffront = (frame.ffront - 1) & 0x1F;
       frame.fast[frame.ffront] = value;
-      if (frame.fsize != FAST_BELT_SIZE)
-       {
-         ++frame.fsize;
-       }
+      frame.fsize = frame.fsize < FAST_BELT_SIZE ? frame.fsize + 1 : FAST_BELT_SIZE;
+
+      frame.fast[(frame.ffront + 30) & 0x1F] = ZERO;
+      frame.fast[(frame.ffront + 31) & 0x1F] = 1;
     }
 
-   void slowretire(BELT_T value)
+   void slowretire(Frame& frame, BELT_T value)
     {
-      Frame& frame = machine->frames.back();
-      if (0U != frame.sfront)
-       {
-         --frame.sfront;
-       }
-      else
-       {
-         frame.sfront = SLOW_BELT_SIZE - 1;
-       }
+      frame.sfront = (frame.sfront - 1) & 0x1F;
       frame.slow[frame.sfront] = value;
-      if (frame.ssize != SLOW_BELT_SIZE)
-       {
-         ++frame.ssize;
-       }
+      frame.ssize = frame.ssize < SLOW_BELT_SIZE ? frame.ssize + 1 : SLOW_BELT_SIZE;
+
+      frame.slow[(frame.sfront + 30) & 0x1F] = INVALID;
+      frame.slow[(frame.sfront + 31) & 0x1F] = TRANSIENT;
     }
 
    void doStuff()
@@ -1433,7 +1322,7 @@ public:
              }
             for (size_t j = 0U; (j < ALU_RETIRE_SIZE) && (0U == (EMPTY & frame->alu_retire[i].slow[j])); ++j)
              {
-               slowretire(frame->alu_retire[i].slow[j]);
+               slowretire(*frame, frame->alu_retire[i].slow[j]);
              }
           }
 //  Retire Flows
@@ -1445,7 +1334,7 @@ public:
              }
             if (0U == (EMPTY & frame->flow_retire[i].slow))
              {
-               slowretire(frame->flow_retire[i].slow);
+               slowretire(*frame, frame->flow_retire[i].slow);
              }
             // The first non-call branch wins and stops flow unit processing
             if ((0U == frame->nextpc) && (0U != frame->flow_retire[i].jump) && (SIGNAL_CALL != frame->flow_retire[i].use))
@@ -1470,7 +1359,7 @@ public:
                   frame->ssize = 0U;
                   for (size_t j = 0U; (j < SLOW_BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
                    {
-                     slowretire(frame->flow_retire[i].belt[j]);
+                     slowretire(*frame, frame->flow_retire[i].belt[j]);
                    }
                   break;
                case SIGNAL_CALL:
