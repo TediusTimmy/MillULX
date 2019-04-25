@@ -329,7 +329,7 @@ public:
          case 15: // NOT TRANSIENT
        }
 */
-      BELT_T conds [] = { 0U, CARRY, OVERFLOW, NEGATIVE, ZERO, ZERO | NEGATIVE, INVALID, TRANSIENT };
+      static const BELT_T conds [] = { 0U, CARRY, OVERFLOW, NEGATIVE, ZERO, ZERO | NEGATIVE, INVALID, TRANSIENT };
       if (0 == cond)
        {
          return true;
