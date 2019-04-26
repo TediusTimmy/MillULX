@@ -122,6 +122,17 @@ public:
    size_t next; // Size of the extra data to this flow instruction
    size_t jump; // The destination of a branch or call instruction (0 IS invalid)
 
+   FlowRetire()
+    {
+      for (size_t i = 0; i < FLOW_RETIRE_SIZE; ++i) fast[i] = EMPTY;
+      slow = EMPTY;
+      nops = 0U;
+      for (size_t i = 0; i < BELT_SIZE; ++i) belt[i] = EMPTY;
+      use = NOT_IN_USE;
+      next = 0U;
+      jump = 0U;
+    }
+
    void flush()
     {
       fast[0] = EMPTY;
