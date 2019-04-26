@@ -208,6 +208,11 @@ public:
       flowpc = 0U;
       entryPoint = 0U;
       nextpc = 0U;
+
+      fast[(ffront + 30) & 0x1F] = ZERO;
+      fast[(ffront + 31) & 0x1F] = 1;
+      slow[(sfront + 30) & 0x1F] = INVALID;
+      slow[(sfront + 31) & 0x1F] = TRANSIENT;
     }
 
    void write(std::FILE * file)
