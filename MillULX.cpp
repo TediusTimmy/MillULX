@@ -51,13 +51,11 @@ These are property of Mill Computing, Inc.
 typedef long long BELT_T;
 typedef unsigned int MEM_T;
 
-static const size_t FAST_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
-static const size_t SLOW_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
-static const size_t BIG_BELT_SIZE = 32U; // If you change this, BAD! things will happen.
+static const size_t BELT_SIZE = 32U; // If you change this, BAD! things will happen.
 static const size_t ALUNITS = 2U;
 static const size_t ALU_RETIRE_SIZE = 2U;
 static const size_t FLOW_UNITS = 1U;
-static const size_t FLOW_RETIRE_SIZE = FAST_BELT_SIZE;
+static const size_t FLOW_RETIRE_SIZE = BELT_SIZE;
 // A not-taken call with a full belt of returns requires this.
 
 static const BELT_T TRANSIENT =  0x200000000LL;
@@ -119,18 +117,25 @@ public:
    BELT_T fast [FLOW_RETIRE_SIZE];
    BELT_T slow;
    size_t nops; // ALU NOPs queued up by the flow instructions
-   BELT_T belt [BIG_BELT_SIZE]; // Don't need it's filled size: just count not EMPTY
+   BELT_T belt [BELT_SIZE]; // Don't need it's filled size: just count not EMPTY
    FlowBeltUse use; // Is the belt used and how
    size_t next; // Size of the extra data to this flow instruction
    size_t jump; // The destination of a branch or call instruction (0 IS invalid)
 
    void flush()
     {
-      for (size_t i = 0; i < FLOW_RETIRE_SIZE; ++i) fast[i] = EMPTY;
+      fast[0] = EMPTY;
+      if (EMPTY != fast[1])
+       {
+         for (size_t i = 1; i < FLOW_RETIRE_SIZE; ++i) fast[i] = EMPTY;
+       }
       slow = EMPTY;
       nops = 0U;
-      for (size_t i = 0; i < BIG_BELT_SIZE; ++i) belt[i] = EMPTY;
-      use = NOT_IN_USE;
+      if ((NOT_IN_USE != use) || (EMPTY != belt[0]))
+       {
+         for (size_t i = 0; i < BELT_SIZE; ++i) belt[i] = EMPTY;
+         use = NOT_IN_USE;
+       }
       next = 0U;
       jump = 0U;
     }
@@ -140,7 +145,7 @@ public:
       std::fwrite(static_cast<void*>(fast), sizeof(BELT_T), FLOW_RETIRE_SIZE, file);
       std::fwrite(static_cast<void*>(&slow), sizeof(BELT_T), 1U, file);
       std::fwrite(static_cast<void*>(&nops), sizeof(size_t), 1U, file);
-      std::fwrite(static_cast<void*>(belt), sizeof(BELT_T), BIG_BELT_SIZE, file);
+      std::fwrite(static_cast<void*>(belt), sizeof(BELT_T), BELT_SIZE, file);
       std::fwrite(static_cast<void*>(&use), sizeof(FlowBeltUse), 1U, file);
       std::fwrite(static_cast<void*>(&next), sizeof(size_t), 1U, file);
       std::fwrite(static_cast<void*>(&jump), sizeof(size_t), 1U, file);
@@ -151,7 +156,7 @@ public:
       std::fread(static_cast<void*>(fast), sizeof(BELT_T), FLOW_RETIRE_SIZE, file);
       std::fread(static_cast<void*>(&slow), sizeof(BELT_T), 1U, file);
       std::fread(static_cast<void*>(&nops), sizeof(size_t), 1U, file);
-      std::fread(static_cast<void*>(belt), sizeof(BELT_T), BIG_BELT_SIZE, file);
+      std::fread(static_cast<void*>(belt), sizeof(BELT_T), BELT_SIZE, file);
       std::fread(static_cast<void*>(&use), sizeof(FlowBeltUse), 1U, file);
       std::fread(static_cast<void*>(&next), sizeof(size_t), 1U, file);
       std::fread(static_cast<void*>(&jump), sizeof(size_t), 1U, file);
@@ -162,8 +167,8 @@ class Frame
  {
 public:
    // ALU/FLOW read-only
-   BELT_T fast [FAST_BELT_SIZE];
-   BELT_T slow [SLOW_BELT_SIZE];
+   BELT_T fast [BELT_SIZE];
+   BELT_T slow [BELT_SIZE];
    size_t ffront, fsize; // The front and size of the fast belt
    size_t sfront, ssize; // The front and size of the slow belt
    size_t alunop;
@@ -180,8 +185,8 @@ public:
 
    void init (void)
     {
-      for (size_t i = 0U; i < FAST_BELT_SIZE; ++i) fast[i] = INVALID;
-      for (size_t i = 0U; i < SLOW_BELT_SIZE; ++i) slow[i] = INVALID;
+      for (size_t i = 0U; i < BELT_SIZE; ++i) fast[i] = INVALID;
+      for (size_t i = 0U; i < BELT_SIZE; ++i) slow[i] = INVALID;
       ffront = 0U;
       fsize = 0U;
       sfront = 0U;
@@ -196,8 +201,8 @@ public:
 
    void write(std::FILE * file)
     {
-      std::fwrite(static_cast<void*>(fast), sizeof(BELT_T), FAST_BELT_SIZE, file);
-      std::fwrite(static_cast<void*>(slow), sizeof(BELT_T), SLOW_BELT_SIZE, file);
+      std::fwrite(static_cast<void*>(fast), sizeof(BELT_T), BELT_SIZE, file);
+      std::fwrite(static_cast<void*>(slow), sizeof(BELT_T), BELT_SIZE, file);
       std::fwrite(static_cast<void*>(&ffront), sizeof(size_t), 1U, file); //std::printf("ffront %lu\n", ffront);
       std::fwrite(static_cast<void*>(&fsize), sizeof(size_t), 1U, file); //std::printf("fsize %lu\n", fsize);
       std::fwrite(static_cast<void*>(&sfront), sizeof(size_t), 1U, file);
@@ -215,8 +220,8 @@ public:
 
    void read(std::FILE * file)
     {
-      std::fread(static_cast<void*>(fast), sizeof(BELT_T), FAST_BELT_SIZE, file);
-      std::fread(static_cast<void*>(slow), sizeof(BELT_T), SLOW_BELT_SIZE, file);
+      std::fread(static_cast<void*>(fast), sizeof(BELT_T), BELT_SIZE, file);
+      std::fread(static_cast<void*>(slow), sizeof(BELT_T), BELT_SIZE, file);
       std::fread(static_cast<void*>(&ffront), sizeof(size_t), 1U, file);
       std::fread(static_cast<void*>(&fsize), sizeof(size_t), 1U, file);
       std::fread(static_cast<void*>(&sfront), sizeof(size_t), 1U, file);
@@ -1227,7 +1232,7 @@ public:
     {
       frame.ffront = (frame.ffront - 1) & 0x1F;
       frame.fast[frame.ffront] = value;
-      frame.fsize = frame.fsize < FAST_BELT_SIZE ? frame.fsize + 1 : FAST_BELT_SIZE;
+      frame.fsize = frame.fsize < BELT_SIZE ? frame.fsize + 1 : BELT_SIZE;
 
       frame.fast[(frame.ffront + 30) & 0x1F] = ZERO;
       frame.fast[(frame.ffront + 31) & 0x1F] = 1;
@@ -1237,7 +1242,7 @@ public:
     {
       frame.sfront = (frame.sfront - 1) & 0x1F;
       frame.slow[frame.sfront] = value;
-      frame.ssize = frame.ssize < SLOW_BELT_SIZE ? frame.ssize + 1 : SLOW_BELT_SIZE;
+      frame.ssize = frame.ssize < BELT_SIZE ? frame.ssize + 1 : BELT_SIZE;
 
       frame.slow[(frame.sfront + 30) & 0x1F] = INVALID;
       frame.slow[(frame.sfront + 31) & 0x1F] = TRANSIENT;
@@ -1349,7 +1354,7 @@ public:
                case CANON:
                   frame->ffront = 0U;
                   frame->fsize = 0U;
-                  for (size_t j = 0U; (j < FAST_BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
+                  for (size_t j = 0U; (j < BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
                    {
                      retire(*frame, frame->flow_retire[i].belt[j]);
                    }
@@ -1357,7 +1362,7 @@ public:
                case SLOW_CANON:
                   frame->sfront = 0U;
                   frame->ssize = 0U;
-                  for (size_t j = 0U; (j < SLOW_BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
+                  for (size_t j = 0U; (j < BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
                    {
                      slowretire(*frame, frame->flow_retire[i].belt[j]);
                    }
@@ -1372,7 +1377,7 @@ public:
                   Frame* prevFrame = &machine->frames[machine->frames.size() - 2U]; // Don't use frame
                   frame = &machine->frames.back();
                   frame->init();
-                  for (size_t j = 0U; (j < FAST_BELT_SIZE) && (0U == (EMPTY & prevFrame->flow_retire[i].belt[j])); ++j)
+                  for (size_t j = 0U; (j < BELT_SIZE) && (0U == (EMPTY & prevFrame->flow_retire[i].belt[j])); ++j)
                    {
                      retire(*frame, prevFrame->flow_retire[i].belt[j]);
                    }
@@ -1384,7 +1389,7 @@ public:
                   if (1U != machine->frames.size())
                    {
                      Frame* prevFrame = &machine->frames[machine->frames.size() - 2U];
-                     for (size_t j = 0U; (j < FAST_BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
+                     for (size_t j = 0U; (j < BELT_SIZE) && (0U == (EMPTY & frame->flow_retire[i].belt[j])); ++j)
                       {
                         retire(*prevFrame, frame->flow_retire[i].belt[j]);
                       }
