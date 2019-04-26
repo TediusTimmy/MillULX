@@ -43,10 +43,8 @@ These are property of Mill Computing, Inc.
 */
 
 #include <vector>
-#include <pthread.h>
 #include <cstdio>
 #include <cstring>
-#include <unistd.h>
 
 typedef long long BELT_T;
 typedef unsigned int MEM_T;
@@ -301,7 +299,6 @@ class FunctionalUnit
  {
 public:
    Machine* machine;
-   pthread_barrier_t* synchronizer;
    size_t slot;
    pthread_t thread;
 
@@ -494,15 +491,12 @@ class ALUnit : public FunctionalUnit
 public:
    virtual void doStuff()
     {
-      for (;;)
-       {
-         //Wait for the start of an instruction cycle
-         pthread_barrier_wait(synchronizer);
+
          // Do we need to die?
          if (true == machine->terminate)
           {
 //            std::printf("Terminating ALU slot: %lu\n", slot);
-            break;
+            return;
           }
          // Interpret and execute the next operation.
          Frame& frame = machine->frames.back();
@@ -818,9 +812,6 @@ public:
              }
           }
 
-         // Signal that we have ended this cycle.
-         pthread_barrier_wait(synchronizer);
-       }
     }
  };
 
@@ -878,15 +869,12 @@ public:
 
    virtual void doStuff()
     {
-      for (;;)
-       {
-         // Wait for the start of the instruction cycle
-         pthread_barrier_wait(synchronizer);
+
          // Do we need to die?
          if (true == machine->terminate)
           {
 //            std::printf("Terminating Flow slot: %lu\n", slot);
-            break;
+            return;
           }
          // Interpret and execute the next operation.
          Frame& frame = machine->frames.back();
@@ -1219,9 +1207,6 @@ public:
              }
           }
 
-         // Signal that we have ended this cycle.
-         pthread_barrier_wait(synchronizer);
-       }
     }
  };
 
@@ -1229,20 +1214,6 @@ class MillCore
  {
 public:
    Machine* machine;
-
-   static void * runMe(void * slot)
-    {
-      MillCore* unit = reinterpret_cast<MillCore*>(slot);
-      unit->doStuff();
-      return NULL;
-    }
-
-   static void * runOne(void * slot)
-    {
-      FunctionalUnit* unit = reinterpret_cast<FunctionalUnit*>(slot);
-      unit->doStuff();
-      return NULL;
-    }
 
    void retire(Frame& frame, BELT_T value)
     {
@@ -1266,33 +1237,31 @@ public:
 
    void doStuff()
     {
-      pthread_barrier_t synchronizer;
-      pthread_barrier_init(&synchronizer, NULL, ALUNITS + FLOW_UNITS + 1U);
       ALUnit aunits [ALUNITS];
       FlowUnit funits [FLOW_UNITS];
 
       for (size_t i = 0U; i < ALUNITS; ++i)
        {
          aunits[i].machine = machine;
-         aunits[i].synchronizer = &synchronizer;
          aunits[i].slot = i;
-         pthread_create(&aunits[i].thread, NULL, runOne, reinterpret_cast<void*>(&aunits[i]));
        }
 
       for (size_t i = 0U; i < FLOW_UNITS; ++i)
        {
          funits[i].machine = machine;
-         funits[i].synchronizer = &synchronizer;
          funits[i].slot = i;
-         pthread_create(&funits[i].thread, NULL, runOne, reinterpret_cast<void*>(&funits[i]));
        }
 
       for (;;)
        {
-         // Signal the start of the instruction cycle
-         pthread_barrier_wait(&synchronizer);
-         // Wait for the end of this cycle.
-         pthread_barrier_wait(&synchronizer);
+         for (size_t i = 0U; i < ALUNITS; ++i)
+          {
+            aunits[i].doStuff();
+          }
+         for (size_t i = 0U; i < FLOW_UNITS; ++i)
+          {
+            funits[i].doStuff();
+          }
 
          // Synthesize unit data.
 //         std::printf("Instruction finished\n");
@@ -1451,7 +1420,6 @@ std::printf("%x %x %x %x %x %x %x %x %x %x %x %x\n",
                std::printf("Terminating Core due to invalid operation\n");
              }
             machine->terminate = true;
-            pthread_barrier_wait(&synchronizer);
             break;
           }
        }
@@ -1463,14 +1431,6 @@ std::printf("%x %x %x %x %x %x %x %x %x %x %x %x\n",
          std::fclose(file);
       }
 
-      for (size_t i = 0U; i < ALUNITS; ++i)
-       {
-         pthread_join(aunits[i].thread, NULL);
-       }
-      for (size_t i = 0U; i < FLOW_UNITS; ++i)
-       {
-         pthread_join(funits[i].thread, NULL);
-       }
     }
  };
 
